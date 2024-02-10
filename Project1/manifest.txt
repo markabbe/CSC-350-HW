@@ -1,0 +1,11 @@
+project1.ipynb
+competition-dev.preds.npy
+competition-test.preds.npy
+logreg-es-dev.preds.npy
+logreg-es-test.preds.npy
+nb-best-test.preds
+nb-dev.preds
+nb-test.preds
+perc-dev.preds
+perc-test.preds
+oswegonlp/*.py
