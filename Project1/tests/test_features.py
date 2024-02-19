@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 def setup_module():
-    global vocab, label_set, x_tr_pruned, X_tr
+    global vocab, label_set, x_tr_pruned, X_tr, Y_tr
 
     y_tr,x_tr = preprocessing.read_data('fakenews-train.csv',preprocessor=preprocessing.bag_of_words)
     labels = set(y_tr)
@@ -15,8 +15,9 @@ def setup_module():
 
     x_tr_pruned, vocab = preprocessing.prune_vocabulary(counts_tr, x_tr, 5)
 
-    X_tr = preprocessing.make_numpy(x_tr_pruned,vocab)
     label_set = sorted(list(set(y_tr)))
+    X_tr = preprocessing.make_numpy(x_tr_pruned,vocab)
+    Y_tr = np.array([label_set.index(y_i) for y_i in y_tr])
 
 def test_d6_1_topfeat_numpy():
     top_feats_fake = features.get_top_features_for_label_numpy(hand_weights.theta_manual,'fake',3)
@@ -28,11 +29,21 @@ def test_d6_1_topfeat_numpy():
     assert (len(top_feats_real) == 3)
 
 def test_d6_2_topfeat_torch():
-	global vocab, label_set
-	model_test = torch.load('tests/test_weights.torch')
+    global vocab, label_set
+    torch.manual_seed(765)
+    model = logistic_regression.build_linear(X_tr,Y_tr)
+    model.add_module('softmax',torch.nn.LogSoftmax(dim=1))
 
-	top_feats_two = features.get_top_features_for_label_torch(model_test, vocab, label_set,'real',5)
-	assert (top_feats_two == ['north', 'says', 'us', 'donald', 'trumps'])
+    model.eval()  
 
-	top_feats_nine = features.get_top_features_for_label_torch(model_test, vocab, label_set,'fake',7)
-	assert (top_feats_nine == ['you', 'is', 'and', 'just', 'a', 'the', 'hillary'])
+    top_feats_real = features.get_top_features_for_label_torch(model, vocab, label_set,'real',10)
+    top_feats_fake = features.get_top_features_for_label_torch(model, vocab, label_set,'fake',10)
+    
+    top_feats_real_sorted = sorted(top_feats_real)
+    top_feats_fake_sorted = sorted(top_feats_fake)
+    
+    expected_real_features_sorted = sorted(['australia', 'turnbull', 'travel', 'korea', 'ban', 'north', 'says', 'us', 'donald', 'trumps'])
+    expected_fake_features_sorted = sorted(['that', 'of', 'it', 'you', 'is', 'and', 'just', 'a', 'the', 'hillary'])
+
+    assert top_feats_real_sorted == expected_real_features_sorted, f"Expected features for 'real' not found. Got {top_feats_real}, expected {expected_real_features_sorted}"
+    assert top_feats_fake_sorted == expected_fake_features_sorted, f"Expected features for 'fake' not found. Got {top_feats_fake}, expected {expected_fake_features_sorted}"

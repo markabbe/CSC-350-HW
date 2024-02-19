@@ -80,9 +80,20 @@ def make_numpy(bags_of_words, vocab):
     :returns: the bags of words as a matrix
     :rtype: numpy array
     '''
-    vocab = sorted(vocab)
-
-    raise NotImplementedError
+    vocab_size = len(vocab)
+    
+    sorted_vocab = sorted(vocab)
+    
+    word_to_index = {word: i for i, word in enumerate(sorted_vocab)}
+    
+    data_array = np.zeros((len(bags_of_words), vocab_size))
+    
+    for i, bow in enumerate(bags_of_words):
+        for word, count in bow.items():
+            if word in word_to_index: 
+                data_array[i, word_to_index[word]] = count
+    
+    return data_array
     
 ### Helper Code ###
 
