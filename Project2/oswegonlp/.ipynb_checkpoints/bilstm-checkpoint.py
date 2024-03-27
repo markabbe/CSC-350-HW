@@ -43,32 +43,27 @@ class BiLSTM(nn.Module):
         self.hidden_dim = hidden_dim
         self.vocab_size = vocab_size
         self.tag_to_ix = tag_to_ix
-        self.ix_to_tag = {v:k for k,v in tag_to_ix.items()}
+        self.ix_to_tag = {v: k for k, v in tag_to_ix.items()}
         self.tagset_size = len(tag_to_ix)
-        
-        """
-        name them as following:
-        self.word_embeds: embedding variable
-        self.lstm: lstm layer
-        self.hidden2tag: fully connected layer
-        """
-        raise NotImplementedError
-        
-        #self.word_embeds = 
-        
+
+        # If a pre-trained embedding is provided, it will be used. Otherwise, a new embedding layer is created.
         if embeddings is not None:
-            if isinstance(embeddings, torch.nn.Embedding):
+            if isinstance(embeddings, nn.Embedding):
                 self.word_embeds = embeddings
             else:
+                self.word_embeds = nn.Embedding(vocab_size, embedding_dim)
                 self.word_embeds.weight.data.copy_(torch.from_numpy(embeddings))
+        else:
+            self.word_embeds = nn.Embedding(vocab_size, embedding_dim)
         
-        # Maps the embeddings of the word into the hidden state. 
-        # In choosing hidden_size, remember this is a *bidirectional* LSTM!
-        #self.lstm = 
+        # LSTM layer, bidirectional set to True
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim // 2, 
+                            num_layers=1, bidirectional=True)
+        
+        # Fully connected layer that maps from hidden state space to tag space
+        self.hidden2tag = nn.Linear(hidden_dim, self.tagset_size)
 
-        # Maps the output of the LSTM into tag space.
-        #self.hidden2tag = 
-        
+        # Initialize the hidden state (see note below)
         self.hidden = self.init_hidden()
 
     def init_hidden(self):
@@ -87,9 +82,11 @@ class BiLSTM(nn.Module):
         Output: 
         returns lstm_feats: scores for each tag for each token in the sentence.
         """
-        self.hidden = self.init_hidden()
-
-        raise NotImplementedError
+        embeds = self.word_embeds(sentence)
+        embeds_reshaped = embeds.view(len(sentence),1,-1)
+        lstm_out, _= self.lstm(embeds_reshaped, self.hidden)
+        tag_space = self.hidden2tag(lstm_out.view(len(sentence), -1))
+        return tag_space
         
     
     

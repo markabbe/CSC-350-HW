@@ -43,13 +43,26 @@ def viterbi_step(all_tags, tag_to_ix, cur_tag_scores, transition_scores, prev_sc
     bptrs = []
     viterbivars = []
 
+    # Additional debugging to inspect the specific tag scores
+    print(f"Emission probabilities for NOUN: {cur_tag_scores[tag_to_ix['NOUN']]}")
+    print(f"Transition scores to NOUN: {transition_scores[:, tag_to_ix['NOUN']]}")
+    print(f"Previous scores: {prev_scores}")
+
     for next_tag in all_tags:
-        next_tag_var = prev_scores + transition_scores[tag_to_ix[next_tag]]
+        next_tag_ix = tag_to_ix[next_tag]
+        next_tag_var = prev_scores + transition_scores[:, next_tag_ix].view(1, -1) + cur_tag_scores[next_tag_ix].view(1, -1)
         best_tag_id = argmax(next_tag_var)
         bptrs.append(best_tag_id)
-        viterbivars.append(next_tag_var[0][best_tag_id].view(1))
+        viterbivars.append(next_tag_var[0][best_tag_id].view(1, -1))
 
-    viterbivars = torch.cat(viterbivars).view(-1)
+    viterbivars = torch.cat(viterbivars, dim=1)
+
+    noun_tag_index = tag_to_ix['NOUN']
+    noun_score = viterbivars[0, noun_tag_index].item()
+    print(f"Score for NOUN tag: {noun_score}")
+
+    # Ensure the assertion is informative
+    assert noun_score == -2, f"Expected score for NOUN is -2, got {noun_score}"
 
     return viterbivars, bptrs
 
