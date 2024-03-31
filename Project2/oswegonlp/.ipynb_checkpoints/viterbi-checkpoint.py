@@ -21,7 +21,7 @@ def argmax(vec):
     _, idx = torch.max(vec, 1)
     return to_scalar(idx)
 
-
+# OMG IT WORKS
 def viterbi_step(all_tags, tag_to_ix, cur_tag_scores, transition_scores, prev_scores):
     """
     Calculates the best path score and corresponding back pointer for each tag for a word in the sentence in pytorch, which you will call from the main viterbi routine.
@@ -40,31 +40,30 @@ def viterbi_step(all_tags, tag_to_ix, cur_tag_scores, transition_scores, prev_sc
     - viterbivars: a list of pytorch Variables such that each element contains the score for each tag in all_tags for the current token in the sentence
     - bptrs: a list of idx that contains the best_previous_tag for each tag in all_tags for the current token in the sentence
     """
-    bptrs = []
-    viterbivars = []
 
-    # Additional debugging to inspect the specific tag scores
-    print(f"Emission probabilities for NOUN: {cur_tag_scores[tag_to_ix['NOUN']]}")
-    print(f"Transition scores to NOUN: {transition_scores[:, tag_to_ix['NOUN']]}")
-    print(f"Previous scores: {prev_scores}")
-
-    for next_tag in all_tags:
-        next_tag_ix = tag_to_ix[next_tag]
-        next_tag_var = prev_scores + transition_scores[:, next_tag_ix].view(1, -1) + cur_tag_scores[next_tag_ix].view(1, -1)
-        best_tag_id = argmax(next_tag_var)
-        bptrs.append(best_tag_id)
-        viterbivars.append(next_tag_var[0][best_tag_id].view(1, -1))
-
-    viterbivars = torch.cat(viterbivars, dim=1)
-
-    noun_tag_index = tag_to_ix['NOUN']
-    noun_score = viterbivars[0, noun_tag_index].item()
-    print(f"Score for NOUN tag: {noun_score}")
-
-    # Ensure the assertion is informative
-    assert noun_score == -2, f"Expected score for NOUN is -2, got {noun_score}"
-
-    return viterbivars, bptrs
+    # Had to extend some variable names to help figure things out LOL
+    backpointers = []
+    viterbivars=[]
+    
+    # Iterate over each possible current tag
+    for curr_tag in list(all_tags):
+        # List to store scores for all possible previous tags transitioning to current tag
+        temp_scores = []
+        for prev_tag in list(all_tags):
+            # If no transition possible
+            if prev_tag == END_TAG or curr_tag == START_TAG:
+                tempScore = torch.tensor(-np.inf)
+            else:
+                # Else, calculate indices for current and previous tags
+                current_index = tag_to_ix[curr_tag]
+                prev_index = tag_to_ix[prev_tag]
+                tempScore = prev_scores[0][prev_index] + transition_scores[current_index][prev_index] + cur_tag_scores[current_index]
+            temp_scores.append(tempScore)
+        backpointers.append(temp_scores.index(max(temp_scores)))
+        viterbivars.append(max(temp_scores))
+            
+    return viterbivars, backpointers
+        
 
 def build_trellis(all_tags, tag_to_ix, cur_tag_scores, transition_scores):
     """
@@ -84,45 +83,53 @@ def build_trellis(all_tags, tag_to_ix, cur_tag_scores, transition_scores):
     - best_path: the actual best_path, which is the list of tags for each token: exclude the START_TAG and END_TAG here.
     """
     
-    # Create the inverse mapping from index to tag name
-    ix_to_tag = {index: tag for tag, index in tag_to_ix.items()}
+    tag_index_map = {value: key for key, value in tag_to_ix.items()}
     
-    # Initialize the list to store the back pointers
-    whole_bptrs = []
-
-    # Initialize the previous scores with the score for the START_TAG
-    initial_vec = np.full((1, len(all_tags)), -np.inf)
-    initial_vec[0][tag_to_ix[START_TAG]] = 0
-    prev_scores = get_torch_variable(initial_vec)
+    # Initialize the start vector with negative infinity for all tags except the START_TAG, which is set to 0.
+    start_vector = np.full((1, len(all_tags)), -np.inf)
+    start_vector[0][tag_to_ix[START_TAG]] = 0
+    # Convert the start vector to a PyTorch Variable for compatibility
+    previous_scores = torch.autograd.Variable(torch.from_numpy(start_vector.astype(np.float32))).view(1, -1)
+    # Empty list to hold backpointers for each step in the sequence
+    backpointers_list = []
     
-    # Iterate over the sentence
-    for step, cur_tag_score in enumerate(cur_tag_scores):
-        # At each step, calculate Viterbi variables and backpointers.
-        viterbivars_t, bptrs_t = viterbi_step(all_tags, tag_to_ix, cur_tag_score, transition_scores, prev_scores)
-        whole_bptrs.append(bptrs_t)
-        # Update scores for the next step
-        prev_scores = viterbivars_t.view(1, -1)
-
-    # Transition to the END_TAG
-    terminal_var = prev_scores + transition_scores[tag_to_ix[END_TAG]]
-    terminal_var[0][tag_to_ix[START_TAG]] = -np.inf
-    path_score, best_tag_id = torch.max(terminal_var, 1)
-    best_path = [best_tag_id.item()]
-
-    # Follow the back pointers to decode the best path
-    for bptrs_t in reversed(whole_bptrs):
-        best_tag_id = bptrs_t[best_tag_id]
-        if isinstance(best_tag_id, int):
-            best_path.append(best_tag_id)
-        else:
-            best_path.append(best_tag_id.item())
-
-    # Remove the start tag from the path and reverse the path
-    start = best_path.pop()
-    best_path.reverse()
+    # Iterate over each set of current tag scores for each token in the sequence
+    for step_index in range(len(cur_tag_scores)):
+        # Calculate the Viterbi scores and backpointers for the current step
+        step_scores, step_backpointers = viterbi_step(all_tags, tag_to_ix, cur_tag_scores[step_index], transition_scores, previous_scores)
     
-    assert start == tag_to_ix[START_TAG]
-    best_path = [ix_to_tag[ix] for ix in best_path]
+        # Extract the scores from the step_scores tensor as a list and update the previous_scores with the current step values  
+        step_values = [step_scores[score_index].item() for score_index in range(len(step_scores))]
+        previous_scores = torch.autograd.Variable(torch.from_numpy(np.asarray([step_values])))
+    
+        backpointers_list.append(step_backpointers)
+    
+    # Prepare the end vector with negative infinity for all positions and set the END_TAG position to 0
+    end_vector = np.full((1, len(all_tags)), -np.inf)
+    end_vector[0][tag_to_ix[END_TAG]] = 0
+    final_scores = torch.from_numpy(end_vector)
+    last_step_scores = final_scores[0]
+    
+    # Perform the final Viterbi step with the end vector to complete the trellis
+    last_word_scores, last_word_backpointers = viterbi_step(all_tags, tag_to_ix, last_step_scores, transition_scores, previous_scores)
+    # Find the index with the highest score in the last step
+    final_index = np.argmax(last_word_scores)
+    # Extract the highest score as the path score
+    highest_score = last_word_scores[final_index]
+    # Use the final index to find the corresponding tag for the last backpointer
+    final_backpointer = tag_index_map[last_word_backpointers[final_index]]
+    # Append the last word's backpointer to the list
+    backpointers_list.append(last_word_backpointers)
+    
+    path_index = len(backpointers_list) - 1
+    path_score = highest_score
+    path_tags = []
+    # Backtrack through the backpointer list to construct the best path
+    while(path_index != 0):
+        path_tags.append(tag_index_map[backpointers_list[path_index][final_index]])
+        final_index = backpointers_list[path_index][final_index]
+        path_index -= 1
+    
+    best_path = path_tags[::-1]
     
     return path_score, best_path
-

@@ -23,34 +23,24 @@ def compute_transition_weights(trans_counts, smoothing):
 
     """
     weights = defaultdict(float)
-    all_tags = set(trans_counts.keys()).union({END_TAG, START_TAG})
+    all_tags = list(trans_counts.keys())+ [END_TAG]
 
+    # Set the transition count from START_TAG to END_TAG to 0 to avoid illegal transitions
     trans_counts[START_TAG][END_TAG] = 0
 
-    # Add END_TAG to the list of all tags, so we can iterate over it.
-    all_tags.add(END_TAG)
-
-    # Calculate transition probabilities with smoothing
+    # Iterate through all pairs of tags to compute transition weights
     for prev_tag in all_tags:
-        # Do not allow transitions from END_TAG to any other tag
-        if prev_tag == END_TAG:
-            continue
-
-        # Calculate total count for each previous tag plus smoothing for all tags
-        total_for_prev_tag = sum(trans_counts[prev_tag].values()) + smoothing * len(all_tags)
-
-        # For each possible current tag, calculate the transition weight.
         for curr_tag in all_tags:
-            # Do not allow transitions to START_TAG from any other tag
-            if curr_tag == START_TAG:
+            # If transitioning from the start tag or to the end tag, set the weight to negative infinity
+            if curr_tag == START_TAG or prev_tag == END_TAG:
                 weights[(curr_tag, prev_tag)] = -np.inf
             else:
-                # Use the count for the current tag from the previous tag,
-                # and apply smoothing to calculate the probability.
-                count_for_curr_tag = trans_counts[prev_tag].get(curr_tag, 0)
-                probability = (count_for_curr_tag + smoothing) / total_for_prev_tag
-                weights[(curr_tag, prev_tag)] = np.log(probability)
-
+                # Compute the numerator as the log of the transition count from prev_tag to curr_tag, smoothed
+                numerator = np.log(smoothing + trans_counts[prev_tag][curr_tag])
+                # Compute the denominator as the log of the total count of transitions out of prev_tag, smoothed
+                denominator = np.log((len(all_tags) - 1) * smoothing + sum(trans_counts[prev_tag].values()))
+                # Calculate the weight (log probability) for the transition from prev_tag to curr_tag
+                weights[(curr_tag, prev_tag)] = numerator - denominator
     return weights
 
 

@@ -13,16 +13,19 @@ class CBOW(torch.nn.Module):
         :param embedding_dim: size of the embeddings.
         """
         super(CBOW, self).__init__()
-
-        #self.embeddings = 
-
-        #self.linear1 = 
-        #self.activation_function1 = 
-
-        #self.linear2 = 
-        #self.activation_function2 = 
         
-        raise NotImplementedError
+        # Embedding layer that will hold the embeddings of the words in the vocab
+        self.embeddings = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embedding_dim)
+        
+        # First linear layer that each embedding will be fed into
+        self.linear1 = nn.Linear(in_features=embedding_dim, out_features=128)
+        # Activation function after the first linear layer
+        self.activation_function1 = nn.ReLU()
+        
+        # Second (output) linear layer that gets input from the hidden layer
+        self.linear2 = nn.Linear(in_features=128, out_features=vocab_size)
+        # Activation function for the output layer to output probabilities
+        self.activation_function2 = nn.LogSoftmax(dim=-1)
     #6.3
     def forward(self, inputs):
         """
@@ -31,7 +34,12 @@ class CBOW(torch.nn.Module):
         :param inputs: a context tensor (first part of the tuple from make_context_tensors)
         :returns: probabilities for each token in the vocabulary (output of log softmax)
         """
-        raise NotImplementedError
+        embeds = sum(self.embeddings(inputs)).view(1,-1)
+        out = self.linear1(embeds)
+        out = self.activation_function1(out)
+        out = self.linear2(out)
+        log_probs = self.activation_function2(out)
+        return log_probs
 
     def get_word_embedding(self, word, word_to_ix):
         word = torch.LongTensor([word_to_ix[word]])
@@ -50,8 +58,20 @@ def build_context(documents, context_size=2):
     """
     
     context_vectors = []
+    # Iterate through each document
+    for doc in documents:
+        # Iterate through each word in the document by index
+        for i, word in enumerate(doc):
+            # Ensure there are enough preceding and following words to form the context
+            if i - context_size >= 0 and i + context_size < len(doc):
+                # Extract context words before and after the current word
+                context_before = doc[i - context_size:i]
+                context_after = doc[i + 1:i + 1 + context_size]
+                # Combine before and after contexts
+                full_context = context_before + context_after
+                context_vectors.append((full_context, word))
     
-    raise NotImplementedError
+    return context_vectors
     
 def make_context_tensors(context_vectors, word_to_ix, device="cpu"):
     """

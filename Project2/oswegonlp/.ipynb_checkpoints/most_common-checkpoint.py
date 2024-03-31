@@ -75,7 +75,6 @@ def get_noun_weights():
     weights[('NOUN'),OFFSET] = 1.
     return weights
 
-# Or is this function the issue?
 def get_most_common_word_weights(trainfile):
     """
     Return a set of weights, so that each word is tagged by its most frequent tag in the training file.
@@ -87,30 +86,29 @@ def get_most_common_word_weights(trainfile):
     :rtype: -- defaultdict
 
     """
-    tag_word_counts = get_tag_word_counts(trainfile)
-    word_tag_freq = defaultdict(lambda: 'NOUN')
+    word_tag_counts = defaultdict(lambda: Counter())
+    overall_tag_count = Counter()
 
-    # Debugging
-    # Prob dont need anymore
-    debug_words = ['the', 'is', 'can', 'and']
-    for debug_word in debug_words:
-        print(f"Debugging tag counts for word: '{debug_word}'")
-        for tag, words in tag_word_counts.items():
-            if debug_word in words:
-                print(f"Tag: {tag}, Count: {words[debug_word]}")
+    # Loop through each word-tag pair in trainfile
+    for (words, tags) in conll_seq_generator(trainfile):
+        for word, tag in zip(words, tags):
+            word_tag_counts[word][tag] += 1
+            overall_tag_count[tag] += 1
+    
+    tag_weights = {}
 
-    # Invert tag_word_counts to get the most common tag for each word
-    for tag, words in tag_word_counts.items():
-        for word, count in words.items():
-            if word not in word_tag_freq or tag_word_counts[word_tag_freq[word]][word] < count:
-                word_tag_freq[word] = tag
+    # Determine most common tag for each word and assign a weight of 1
+    for word in word_tag_counts.keys():
+        most_common_tag = word_tag_counts[word].most_common(1)[0][0]
+        tag_weights[(most_common_tag, word)] = 1
 
-    # Create weight dictionary
-    word_weights = defaultdict(float)
-    for word, tag in word_tag_freq.items():
-        word_weights[(word, tag)] = 1.0
+    # Find the most common tag overall and assign a special weight of 0.5 with the OFFSET
+    dominant_tag = overall_tag_count.most_common(1)[0][0]
+    tag_weights[(dominant_tag, OFFSET)] = 0.5
 
-    return word_weights
+    weights = defaultdict(float, tag_weights)
+    
+    return weights
 
 def get_tag_trans_counts(input_file):
     """compute a dict of counters for tag transitions

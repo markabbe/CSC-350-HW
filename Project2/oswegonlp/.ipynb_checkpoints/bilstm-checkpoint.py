@@ -46,7 +46,6 @@ class BiLSTM(nn.Module):
         self.ix_to_tag = {v: k for k, v in tag_to_ix.items()}
         self.tagset_size = len(tag_to_ix)
 
-        # If a pre-trained embedding is provided, it will be used. Otherwise, a new embedding layer is created.
         if embeddings is not None:
             if isinstance(embeddings, nn.Embedding):
                 self.word_embeds = embeddings
@@ -87,8 +86,6 @@ class BiLSTM(nn.Module):
         lstm_out, _= self.lstm(embeds_reshaped, self.hidden)
         tag_space = self.hidden2tag(lstm_out.view(len(sentence), -1))
         return tag_space
-        
-    
     
     def predict(self, sentence):
         """

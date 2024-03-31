@@ -3,6 +3,7 @@ from oswegonlp import preprocessing
 from oswegonlp import classifier_base
 from oswegonlp import bilstm
 from oswegonlp.constants import DEV_FILE, OFFSET, TRAIN_FILE, UNK
+from collections import defaultdict, Counter
 import operator
 
 argmax = lambda x : max(x.iteritems(),key=lambda y : y[1])[0]
@@ -27,21 +28,14 @@ def make_classifier_tagger(weights):
         :returns: list of tags
         :rtype: list
         """
-        predicted_tags = []
+        tagList = []
         for word in words:
-            # Initialize scores dictionary for current word
-            scores = {}
-            for tag in all_tags:
-                # Initialize feature vector for current word and tag
-                features = {(word, tag): 1, (OFFSET, tag): 1}
-                # Calculate score for current tag... Is this the issue?
-                score = sum(weights.get(feature, 0) * val for feature, val in features.items())
-                scores[tag] = score
-            # Predict the tag with highest score.
-            predicted_tag = max(scores.items(), key=operator.itemgetter(1))[0]
-            predicted_tags.append(predicted_tag)
-        return predicted_tags
-
+            wordCounter = Counter()
+            wordCounter[word] = 1
+            pred, pred_weight = classifier_base.predict(wordCounter, weights, all_tags)
+            tagList.append(pred)
+        return tagList
+        
     return classify
 
 # compute tag with most unique word types: check if needed?
